@@ -1,0 +1,15 @@
+[project]
+name = "zurich-footfall-forecast"
+version = "0.1.0"
+description = "24-hour-ahead pedestrian footfall forecasting for Bahnhofstrasse Mitte in Zurich"
+
+requires-python = ">=3.10,<3.11"
+
+dependencies = [
+    "pandas",
+    "numpy",
+    "requests",
+    "pyarrow",
+    "pyyaml",
+    "python-dotenv",
+]

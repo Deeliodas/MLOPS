@@ -1,0 +1,41 @@
+project:
+  name: "zurich-footfall-forecast"
+
+data:
+  location_id: 329
+  location_name: "Bahnhofstrasse (Mitte)"
+  source_url: "CSV_DOWNLOAD_LINK_FRoM_SOURCE_URL"
+  polling_interval_hours: 3
+
+paths:
+  raw_data: "data/raw"
+  feature_data: "data/features"
+
+target:
+  column: "pedestrians_count"
+  forecast_horizon_hours: 24
+
+data_quality:
+  verified_only: true
+
+features:
+  pedestrian_lags:
+    - 1
+    - 2
+    - 24
+    - 168
+
+  rolling_windows:
+    - 3
+    - 6
+    - 24
+
+  calendar:
+    - hour
+    - day_of_week
+    - weekend
+    - month
+
+  weather:
+    temperature: true
+    condition: true
