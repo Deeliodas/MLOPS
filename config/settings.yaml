@@ -4,7 +4,7 @@ project:
 data:
   location_id: 329
   location_name: "Bahnhofstrasse (Mitte)"
-  source_url: "CSV_DOWNLOAD_LINK_FRoM_SOURCE_URL"
+  source_url: "https://data.stadt-zuerich.ch/dataset/hystreet_fussgaengerfrequenzen/download/hystreet_fussgaengerfrequenzen_seit2021.csv"
   polling_interval_hours: 3
 
 paths:
