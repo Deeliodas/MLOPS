@@ -20,10 +20,8 @@ data_quality:
 
 features:
   pedestrian_lags:
-    - 1
-    - 2
     - 24
-    - 168
+    - 168 
 
   rolling_windows:
     - 3
