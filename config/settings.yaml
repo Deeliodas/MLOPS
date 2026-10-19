@@ -7,6 +7,9 @@ data:
   source_url: "https://data.stadt-zuerich.ch/dataset/hystreet_fussgaengerfrequenzen/download/hystreet_fussgaengerfrequenzen_seit2021.csv"
   polling_interval_hours: 3
 
+weather:
+  points_metadata_url: "<MeteoSwiss point metadata CSV URL>"
+
 paths:
   raw_data: "data/raw"
   feature_data: "data/features"
@@ -37,3 +40,26 @@ features:
   weather:
     temperature: true
     condition: true
+
+
+weather_data:
+  provider: "open_meteo"
+
+  latitude: 47.37236452300696            #latitude & longitude found over https://www.gps-coordinates.net/
+  longitude: 8.538305519795442
+  timezone: "GMT"
+
+  model: "dwd_icon_d2"
+
+  historical_api_url: "https://previous-runs-api.open-meteo.com/v1/forecast"
+  live_api_url: "https://api.open-meteo.com/v1/forecast"
+
+  historical_variables:
+    - temperature_2m_previous_day1
+    - precipitation_previous_day1
+    - weather_code_previous_day1
+
+  live_variables:
+    - temperature_2m
+    - precipitation
+    - weather_code
