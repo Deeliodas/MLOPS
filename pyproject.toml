@@ -12,4 +12,5 @@ dependencies = [
     "pyarrow",
     "pyyaml",
     "python-dotenv",
+    "holidays>=0.107",
 ]

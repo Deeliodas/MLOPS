@@ -63,3 +63,20 @@ weather_data:
     - temperature_2m
     - precipitation
     - weather_code
+
+time:
+  local_timezone: "Europe/Zurich"
+
+events:
+  street_parade_impact:
+    - "2024-08-10"
+    - "2024-08-11"
+    - "2025-08-09"
+    - "2025-08-10"
+    - "2026-08-08"
+    - "2026-08-09"
+
+  sechselaeuten:
+    - "2024-04-15"
+    - "2025-04-28"
+    - "2026-04-20"
