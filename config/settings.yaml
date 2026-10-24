@@ -24,12 +24,14 @@ data_quality:
 features:
   pedestrian_lags:
     - 24
-    - 168 
+    - 168
 
   rolling_windows:
     - 3
     - 6
     - 24
+
+  rolling_end_lag_hours: 24
 
   calendar:
     - hour
@@ -80,3 +82,10 @@ events:
     - "2024-04-15"
     - "2025-04-28"
     - "2026-04-20"
+
+feature_store:
+  directory: "data/features"
+  filename_prefix: "footfall_features"
+  training_subdirectory: "training"
+  live_subdirectory: "live"
+  
