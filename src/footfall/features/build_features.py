@@ -202,3 +202,196 @@ def add_event_features(dataframe: pd.DataFrame) -> pd.DataFrame:
     ).astype(int)
 
     return feature_dataframe
+
+
+
+
+def add_rolling_features(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """Add verified rolling pedestrian means ending 24 hours before prediction time."""
+
+    feature_dataframe = dataframe.copy()
+
+    rolling_windows = SETTINGS["features"]["rolling_windows"]
+    end_lag_hours = SETTINGS["features"]["rolling_end_lag_hours"]
+
+    rolling_source = dataframe[
+        [
+            "timestamp",
+            "pedestrians_count",
+            "unverified",
+        ]
+    ].copy()
+
+    verified_counts = rolling_source["pedestrians_count"].where(
+        ~rolling_source["unverified"].astype(bool)
+    )
+
+    for window_hours in rolling_windows:
+        rolling_source[f"pedestrians_mean_{window_hours}h"] = (
+            verified_counts
+            .rolling(
+                window=window_hours,
+                min_periods=window_hours,
+            )
+            .mean()
+        )
+
+    rolling_columns = [
+        f"pedestrians_mean_{window_hours}h"
+        for window_hours in rolling_windows
+    ]
+
+    rolling_features = rolling_source[
+        ["timestamp", *rolling_columns]
+    ].copy()
+
+    rolling_features["timestamp"] = (
+        rolling_features["timestamp"]
+        + pd.Timedelta(hours=end_lag_hours)
+    )
+
+    rolling_features = rolling_features.rename(
+        columns={
+            column: f"{column}_lag{end_lag_hours}h"
+            for column in rolling_columns
+        }
+    )
+
+    feature_dataframe = feature_dataframe.merge(
+        rolling_features,
+        on="timestamp",
+        how="left",
+    )
+
+    return feature_dataframe
+
+
+
+
+def build_base_features(
+    dataframe: pd.DataFrame,
+    weather_dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    """Build features shared by training and inference."""
+
+    feature_dataframe = add_target_time_features(dataframe)
+
+    feature_dataframe = add_pedestrian_lag_features(
+        feature_dataframe
+    )
+
+    feature_dataframe = add_rolling_features(
+        feature_dataframe
+    )
+
+    feature_dataframe = add_weather_features(
+        feature_dataframe,
+        weather_dataframe,
+    )
+
+    feature_dataframe = add_holiday_feature(
+        feature_dataframe
+    )
+
+    feature_dataframe = add_event_features(
+        feature_dataframe
+    )
+    
+    validate_feature_data(
+        feature_dataframe,
+        require_target=False,
+    )
+
+    return feature_dataframe
+
+
+
+
+def build_training_features(
+    dataframe: pd.DataFrame,
+    weather_dataframe: pd.DataFrame,
+) -> pd.DataFrame:
+    """Build the complete feature table including the training target."""
+
+    feature_dataframe = build_base_features(
+        dataframe,
+        weather_dataframe,
+    )
+
+    feature_dataframe = add_target(
+        feature_dataframe
+    )
+
+    validate_feature_data(
+    feature_dataframe,
+    require_target=True,
+)
+
+    return feature_dataframe    
+
+
+
+
+def validate_feature_data(
+    dataframe: pd.DataFrame,
+    require_target: bool = False,
+) -> None:
+    """Validate the structure of the engineered feature data."""
+
+    required_columns = {
+        "timestamp",
+        "target_timestamp",
+        "target_hour",
+        "target_day_of_week",
+        "target_is_weekend",
+        "target_month",
+        "pedestrians_lag_24h",
+        "pedestrians_lag_168h",
+        "pedestrians_mean_3h_lag24h",
+        "pedestrians_mean_6h_lag24h",
+        "pedestrians_mean_24h_lag24h",
+        "forecast_temperature",
+        "forecast_precipitation",
+        "forecast_weather_code",
+        "target_is_holiday",
+        "target_is_street_parade_impact",
+        "target_is_sechselaeuten",
+    }
+
+    if require_target:
+        required_columns.update(
+            {
+                "target_pedestrians",
+                "target_unverified",
+            }
+        )
+
+    missing_columns = required_columns - set(dataframe.columns)
+
+    if missing_columns:
+        raise ValueError(
+            f"Missing required feature columns: {sorted(missing_columns)}"
+        )
+
+    duplicate_timestamps = dataframe["timestamp"].duplicated().sum()
+
+    if duplicate_timestamps > 0:
+        raise ValueError(
+            f"Found {duplicate_timestamps} duplicate feature timestamps."
+        )
+
+    expected_target_timestamp = (
+        dataframe["timestamp"]
+        + pd.Timedelta(
+            hours=SETTINGS["target"]["forecast_horizon_hours"]
+        )
+    )
+
+    invalid_target_timestamps = (
+        dataframe["target_timestamp"] != expected_target_timestamp
+    )
+
+    if invalid_target_timestamps.any():
+        raise ValueError(
+            "Found target timestamps that do not match the forecast horizon."
+        )
