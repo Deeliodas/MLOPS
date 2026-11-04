@@ -1,3 +1,7 @@
+# Feature storage for the Zurich Footfall Forecast.
+# Saves versioned training and live feature snapshots as Parquet files
+#and loads the most recent snapshot from the feature store.
+
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,6 +44,7 @@ def save_feature_snapshot(
 
     filename_prefix = SETTINGS["feature_store"]["filename_prefix"]
 
+    # creates the timestamp for version control
     version = datetime.now(timezone.utc).strftime(
         "%Y%m%dT%H%M%SZ"
     )
@@ -48,6 +53,7 @@ def save_feature_snapshot(
         f"{filename_prefix}_{version}.parquet"
     )
 
+    #saves DataFrame as Parquet File
     dataframe.to_parquet(
         file_path,
         index=False,
@@ -68,6 +74,7 @@ def load_latest_feature_snapshot(
     filename_prefix = SETTINGS["feature_store"]["filename_prefix"]
 
     feature_files = sorted(
+        #find all matching Parquet files
         feature_store_directory.glob(
             f"{filename_prefix}_*.parquet"
         )
@@ -78,6 +85,7 @@ def load_latest_feature_snapshot(
             f"No {store_type} feature snapshots found."
         )
 
+    # takes the last file in the sorted list.
     latest_file = feature_files[-1]
 
     return pd.read_parquet(latest_file)

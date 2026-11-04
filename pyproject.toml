@@ -1,3 +1,6 @@
+#Project configuration for the Zurich Footfall Forecast.
+#Defines the Python Version and the dependencies required to run and test the feature pipeline.
+
 [project]
 name = "zurich-footfall-forecast"
 version = "0.1.0"

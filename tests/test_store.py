@@ -1,3 +1,7 @@
+# Tests for the feature store functions.
+# Verifies that training and live feature snapshots are saved and loaded correctly and that invalid store types raise an error.
+
+
 from pathlib import Path
 
 import pandas as pd

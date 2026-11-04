@@ -1,3 +1,9 @@
+# Tests for the feature engineering functions.
+# Verifies target creation, lag and rolling features, calendar features,
+# holidays, events, and correct target-time handling.
+
+
+
 import pandas as pd
 
 from footfall.features.build_features import (

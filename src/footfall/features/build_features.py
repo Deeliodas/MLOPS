@@ -1,3 +1,7 @@
+#Feature engineering for the Zurich Footfall Forecast.
+#Creates target-time, lag, rolling, weather, holiday, and event features
+#and builds the final feature tables for training and live inference.
+
 import pandas as pd
 import holidays
 
@@ -23,6 +27,7 @@ def add_target_time_features(dataframe: pd.DataFrame) -> pd.DataFrame:
     ].dt.tz_convert(local_timezone)
 
     feature_dataframe["target_hour"] = local_target_time.dt.hour
+    #Saves the day of the week as number (e.g. Monday = 0)
     feature_dataframe["target_day_of_week"] = local_target_time.dt.dayofweek
 
     feature_dataframe["target_is_weekend"] = (
@@ -83,6 +88,7 @@ def add_target(
         ["timestamp", "pedestrians_count", "unverified"]
     ].copy()
 
+    #Move tiemstamp 24hours back to get the target value
     target_dataframe["timestamp"] = (
         target_dataframe["timestamp"]
         - pd.Timedelta(hours=forecast_horizon)
@@ -151,6 +157,7 @@ def add_holiday_feature(dataframe: pd.DataFrame) -> pd.DataFrame:
         "target_timestamp"
     ].dt.tz_convert(local_timezone)
 
+    # removes Date & timezone, keeps only the date
     target_dates = local_target_time.dt.date
 
     years = sorted({
@@ -222,6 +229,7 @@ def add_rolling_features(dataframe: pd.DataFrame) -> pd.DataFrame:
         ]
     ].copy()
 
+    # Only keep verified footfall values
     verified_counts = rolling_source["pedestrians_count"].where(
         ~rolling_source["unverified"].astype(bool)
     )
@@ -318,6 +326,7 @@ def build_training_features(
         weather_dataframe,
     )
 
+    #also adds the true future goal (target_pedestrain)
     feature_dataframe = add_target(
         feature_dataframe
     )

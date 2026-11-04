@@ -1,3 +1,7 @@
+# Weather ingestion for the Zurich Footfall Forecast.
+#Loads historical point-in-time and live weather forecasts from Open-Meteo,
+#validates the hourly forecast data, and selects the weather for the target hour.
+
 import pandas as pd
 import requests
 
@@ -33,6 +37,7 @@ def load_historical_weather(
 
     response.raise_for_status()                  
 
+    #converts the API's JSON response into Python data.
     payload = response.json()                    
 
     dataframe = pd.DataFrame(payload["hourly"])
@@ -171,10 +176,12 @@ def select_target_weather(
     #round the timestamp down to the full hour
     prediction_timestamp = prediction_timestamp.floor("h")
 
+    # calculate target-hour
     target_timestamp = prediction_timestamp + pd.Timedelta(
         hours=forecast_horizon
     )
 
+    #give out the weahter value of this hour
     target_weather = dataframe[
         dataframe["timestamp"] == target_timestamp
     ].copy()
@@ -196,7 +203,3 @@ def select_target_weather(
         )
 
     return target_weather.reset_index(drop=True)
-
-
-
-

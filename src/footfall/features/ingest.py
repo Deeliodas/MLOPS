@@ -1,3 +1,6 @@
+# Data ingestion for the Zurich Footfall Forecast. Loads the Hystreet dataset, selects Bahnhofstrasse Mitte,
+# prepares timestamps, and validates the hourly time series.
+
 import pandas as pd
 
 from footfall.common.config import SETTINGS

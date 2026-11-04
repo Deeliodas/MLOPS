@@ -1,3 +1,6 @@
+# Pipeline orchestration for the Zurich Footfall Forecast.
+# Runs historical backfills and the live feature pipeline, then stores the resulting training or live feature snapshots.
+
 import argparse
 
 import pandas as pd
@@ -73,6 +76,7 @@ def run_live_pipeline() -> pd.DataFrame:
 
     weather_dataframe = load_live_weather()
 
+    # Selects the Weather conditions for the target hour +24 hours
     target_weather = select_target_weather(
         weather_dataframe,
         prediction_timestamp=latest_timestamp,
@@ -112,10 +116,11 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     subparsers = parser.add_subparsers(
-        dest="mode",
+        dest="mode",                                  # mode: backfill or live
         required=True,
     )
 
+    #Defines backfille mode
     backfill_parser = subparsers.add_parser(
         "backfill",
         help="Build historical training features.",
@@ -133,6 +138,7 @@ def parse_arguments() -> argparse.Namespace:
         help="Backfill end date in YYYY-MM-DD format.",
     )
 
+    # Defines Live Mode
     subparsers.add_parser(
         "live",
         help="Build the latest live feature row.",

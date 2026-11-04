@@ -1,3 +1,5 @@
+# Central configuration for the Zurich Footfall Forecast feature pipeline.
+
 project:
   name: "zurich-footfall-forecast"
 
@@ -6,9 +8,6 @@ data:
   location_name: "Bahnhofstrasse (Mitte)"
   source_url: "https://data.stadt-zuerich.ch/dataset/hystreet_fussgaengerfrequenzen/download/hystreet_fussgaengerfrequenzen_seit2021.csv"
   polling_interval_hours: 3
-
-weather:
-  points_metadata_url: "<MeteoSwiss point metadata CSV URL>"
 
 paths:
   raw_data: "data/raw"
@@ -88,4 +87,5 @@ feature_store:
   filename_prefix: "footfall_features"
   training_subdirectory: "training"
   live_subdirectory: "live"
+
   
