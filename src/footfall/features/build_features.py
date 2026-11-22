@@ -46,29 +46,77 @@ def add_pedestrian_lag_features(dataframe: pd.DataFrame) -> pd.DataFrame:
 
     feature_dataframe = dataframe.copy()
 
-    pedestrian_lags = SETTINGS["features"]["pedestrian_lags"]
+    forecast_horizon = SETTINGS["target"]["forecast_horizon_hours"]
+    verified_only = SETTINGS["data_quality"]["verified_only"]
 
-    for lag_hours in pedestrian_lags:
-        lagged_dataframe = dataframe[
-            ["timestamp", "pedestrians_count"]
-        ].copy()
+    lag_source = dataframe[
+        [
+            "timestamp",
+            "pedestrians_count",
+            "unverified",
+        ]
+    ].copy()
 
-        lagged_dataframe["timestamp"] = (
-            lagged_dataframe["timestamp"]
-            + pd.Timedelta(hours=lag_hours)
+    # Only use verified pedestrian counts if configured.
+    if verified_only:
+        lag_source["pedestrians_count"] = (
+            lag_source["pedestrians_count"].where(
+                ~lag_source["unverified"].astype(bool)
+            )
         )
 
-        lagged_dataframe = lagged_dataframe.rename(
-            columns={
-                "pedestrians_count": f"pedestrians_lag_{lag_hours}h"
-            }
-        )
+    # 24-hour lag relative to prediction time.
+    lag_24h_dataframe = lag_source[
+        ["timestamp", "pedestrians_count"]
+    ].copy()
 
-        feature_dataframe = feature_dataframe.merge(
-            lagged_dataframe,
-            on="timestamp",
-            how="left",
+    lag_24h_dataframe["timestamp"] = (
+        lag_24h_dataframe["timestamp"]
+        + pd.Timedelta(hours=24)
+    )
+
+    lag_24h_dataframe = lag_24h_dataframe.rename(
+        columns={
+            "pedestrians_count": "pedestrians_lag_24h"
+        }
+    )
+
+    feature_dataframe = feature_dataframe.merge(
+        lag_24h_dataframe,
+        on="timestamp",
+        how="left",
+    )
+
+    # Weekly lag relative to target time.
+    # target_timestamp = prediction timestamp + forecast horizon.
+    # Therefore, target - 168h equals prediction timestamp - 144h
+    # for a 24-hour forecast horizon.
+    weekly_lag_from_prediction = (
+        168 - forecast_horizon
+    )
+
+    weekly_lag_dataframe = lag_source[
+        ["timestamp", "pedestrians_count"]
+    ].copy()
+
+    weekly_lag_dataframe["timestamp"] = (
+        weekly_lag_dataframe["timestamp"]
+        + pd.Timedelta(
+            hours=weekly_lag_from_prediction
         )
+    )
+
+    weekly_lag_dataframe = weekly_lag_dataframe.rename(
+        columns={
+            "pedestrians_count": "pedestrians_lag_168h"
+        }
+    )
+
+    feature_dataframe = feature_dataframe.merge(
+        weekly_lag_dataframe,
+        on="timestamp",
+        how="left",
+    )
 
     return feature_dataframe
 
@@ -276,6 +324,33 @@ def add_rolling_features(dataframe: pd.DataFrame) -> pd.DataFrame:
 
 
 
+def select_feature_columns(
+    dataframe: pd.DataFrame,
+    include_target: bool = False,
+) -> pd.DataFrame:
+    """Keep only configured model features and required metadata columns."""
+
+    model_columns = SETTINGS["features"]["model_columns"]
+
+    selected_columns = [
+        "timestamp",
+        "target_timestamp",
+        *model_columns,
+    ]
+
+    if include_target:
+        selected_columns.extend(
+            [
+                "target_pedestrians",
+                "target_unverified",
+            ]
+        )
+
+    return dataframe[selected_columns].copy()
+
+
+
+
 def build_base_features(
     dataframe: pd.DataFrame,
     weather_dataframe: pd.DataFrame,
@@ -304,10 +379,16 @@ def build_base_features(
     feature_dataframe = add_event_features(
         feature_dataframe
     )
-    
+
     validate_feature_data(
         feature_dataframe,
         require_target=False,
+    )
+
+    # Remove raw input columns and keep only model features.
+    feature_dataframe = select_feature_columns(
+        feature_dataframe,
+        include_target=False,
     )
 
     return feature_dataframe
@@ -326,17 +407,36 @@ def build_training_features(
         weather_dataframe,
     )
 
-    #also adds the true future goal (target_pedestrain)
-    feature_dataframe = add_target(
-        feature_dataframe
+    # Build the target from the original pedestrian data.
+    target_dataframe = add_target(
+        dataframe
+    )
+
+    target_dataframe = target_dataframe[
+        [
+            "timestamp",
+            "target_pedestrians",
+            "target_unverified",
+        ]
+    ].copy()
+
+    feature_dataframe = feature_dataframe.merge(
+        target_dataframe,
+        on="timestamp",
+        how="left",
     )
 
     validate_feature_data(
-    feature_dataframe,
-    require_target=True,
-)
+        feature_dataframe,
+        require_target=True,
+    )
 
-    return feature_dataframe    
+    feature_dataframe = select_feature_columns(
+        feature_dataframe,
+        include_target=True,
+    )
+
+    return feature_dataframe 
 
 
 
@@ -347,24 +447,12 @@ def validate_feature_data(
 ) -> None:
     """Validate the structure of the engineered feature data."""
 
+    model_columns = SETTINGS["features"]["model_columns"]
+
     required_columns = {
         "timestamp",
         "target_timestamp",
-        "target_hour",
-        "target_day_of_week",
-        "target_is_weekend",
-        "target_month",
-        "pedestrians_lag_24h",
-        "pedestrians_lag_168h",
-        "pedestrians_mean_3h_lag24h",
-        "pedestrians_mean_6h_lag24h",
-        "pedestrians_mean_24h_lag24h",
-        "forecast_temperature",
-        "forecast_precipitation",
-        "forecast_weather_code",
-        "target_is_holiday",
-        "target_is_street_parade_impact",
-        "target_is_sechselaeuten",
+        *model_columns,
     }
 
     if require_target:

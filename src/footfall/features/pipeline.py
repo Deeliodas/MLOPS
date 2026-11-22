@@ -4,6 +4,8 @@
 import argparse
 
 import pandas as pd
+from footfall.common.config import SETTINGS
+
 
 from footfall.features.build_features import (
     build_base_features,
@@ -13,9 +15,8 @@ from footfall.features.ingest import ingest_pedestrian_data
 from footfall.features.ingest_weather import (
     load_historical_weather,
     load_live_weather,
-    select_target_weather,
 )
-from footfall.features.store import save_feature_snapshot
+from footfall.features.store import save_feature_rows
 
 
 def run_backfill(
@@ -54,19 +55,62 @@ def run_backfill(
         & (feature_dataframe["target_timestamp"] < end_timestamp)
     ].copy()
 
-    file_path = save_feature_snapshot(
+    # Saves or updates the historical feature rows in the persistent GCS feature store.
+    feature_store_path = save_feature_rows(
         feature_dataframe,
-        store_type="training",
     )
 
     print(
         f"Saved {len(feature_dataframe)} training feature rows "
-        f"to {file_path}"
+        f"to {feature_store_path}"
     )
 
 
+def create_live_prediction_timestamps(
+    reference_timestamp: pd.Timestamp,
+) -> pd.DatetimeIndex:
+    """Create prediction timestamps for all target hours of the next local day."""
+
+    local_timezone = SETTINGS["time"]["local_timezone"]
+    forecast_horizon = SETTINGS["target"]["forecast_horizon_hours"]
+
+    reference_timestamp = pd.Timestamp(reference_timestamp)
+
+    if reference_timestamp.tzinfo is None:
+        reference_timestamp = reference_timestamp.tz_localize("UTC")
+    else:
+        reference_timestamp = reference_timestamp.tz_convert("UTC")
+
+    reference_local = reference_timestamp.tz_convert(local_timezone)
+
+    next_day_start_local = (
+        reference_local.normalize()
+        + pd.DateOffset(days=1)
+    )
+
+    next_day_end_local = (
+        next_day_start_local
+        + pd.DateOffset(days=1)
+    )
+
+    target_timestamps_local = pd.date_range(
+        start=next_day_start_local,
+        end=next_day_end_local,
+        freq="h",
+        inclusive="left",
+    )
+
+    prediction_timestamps_utc = (
+        target_timestamps_local.tz_convert("UTC")
+        - pd.Timedelta(hours=forecast_horizon)
+    )
+
+    return prediction_timestamps_utc
+
+
+
 def run_live_pipeline() -> pd.DataFrame:
-    """Build and store the latest feature row for live inference."""
+    """Build and store feature rows for all target hours of the next local day."""
 
     pedestrian_dataframe = ingest_pedestrian_data()
 
@@ -74,38 +118,78 @@ def run_live_pipeline() -> pd.DataFrame:
         "timestamp"
     ].max()
 
+    prediction_timestamps = create_live_prediction_timestamps(
+        latest_timestamp
+    )
+
+    # Add timestamp-only anchor rows for hours that are not yet present
+    # in the Hystreet data.
+    anchor_dataframe = pd.DataFrame(
+        {
+            "timestamp": prediction_timestamps,
+        }
+    )
+
+    extended_pedestrian_dataframe = pd.concat(
+        [
+            pedestrian_dataframe,
+            anchor_dataframe,
+        ],
+        ignore_index=True,
+    )
+
+    # Keep the real Hystreet row if a timestamp already exists.
+    extended_pedestrian_dataframe = (
+        extended_pedestrian_dataframe
+        .drop_duplicates(
+            subset=["timestamp"],
+            keep="first",
+        )
+        .sort_values("timestamp")
+        .reset_index(drop=True)
+    )
+
     weather_dataframe = load_live_weather()
 
-    # Selects the Weather conditions for the target hour +24 hours
-    target_weather = select_target_weather(
-        weather_dataframe,
-        prediction_timestamp=latest_timestamp,
-    )
-
     feature_dataframe = build_base_features(
-        pedestrian_dataframe,
-        target_weather,
+        extended_pedestrian_dataframe,
+        weather_dataframe,
     )
 
-    live_feature = feature_dataframe[
-        feature_dataframe["timestamp"] == latest_timestamp
+    live_features = feature_dataframe[
+        feature_dataframe["timestamp"].isin(
+            prediction_timestamps
+        )
     ].copy()
 
-    if live_feature.empty:
+    if len(live_features) != len(prediction_timestamps):
         raise ValueError(
-            f"No live feature row found for {latest_timestamp}."
+            "Could not build all required live feature rows."
         )
 
-    file_path = save_feature_snapshot(
-        live_feature,
-        store_type="live",
+    weather_columns = [
+        "forecast_temperature",
+        "forecast_precipitation",
+        "forecast_weather_code",
+    ]
+
+    if live_features[weather_columns].isna().any().any():
+        raise ValueError(
+            "Live feature rows contain missing weather values."
+        )
+
+    feature_store_path = save_feature_rows(
+        live_features
     )
 
     print(
-        f"Saved live feature row to {file_path}"
+        f"Saved {len(live_features)} live feature rows "
+        f"to {feature_store_path}"
     )
 
-    return live_feature
+    return live_features
+
+
 
 
 def parse_arguments() -> argparse.Namespace:

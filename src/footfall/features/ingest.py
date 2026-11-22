@@ -1,17 +1,27 @@
 # Data ingestion for the Zurich Footfall Forecast. Loads the Hystreet dataset, selects Bahnhofstrasse Mitte,
 # prepares timestamps, and validates the hourly time series.
 
+from io import BytesIO
+
 import pandas as pd
 
 from footfall.common.config import SETTINGS
+from footfall.common.http import get_with_retry
 
 
 def load_source_data() -> pd.DataFrame:
-    """Load the hystreet fussgaengerfrequenz seit 2021 dataset from Open Data Zürich"""
+    """Download the pedestrian source CSV and return it as a dataframe."""
 
     source_url = SETTINGS["data"]["source_url"]
 
-    dataframe = pd.read_csv(source_url)
+    response = get_with_retry(
+        source_url,
+        timeout=30,
+    )
+
+    dataframe = pd.read_csv(
+        BytesIO(response.content)
+    )
 
     return dataframe
 

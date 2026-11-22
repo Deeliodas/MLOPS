@@ -6,7 +6,7 @@ name = "zurich-footfall-forecast"
 version = "0.1.0"
 description = "24-hour-ahead pedestrian footfall forecasting for Bahnhofstrasse Mitte in Zurich"
 
-requires-python = ">=3.10,<3.11"
+requires-python = ">=3.11,<3.12"
 
 dependencies = [
     "pandas",
@@ -16,9 +16,18 @@ dependencies = [
     "pyyaml",
     "python-dotenv",
     "holidays>=0.107",
+    "google-cloud-storage",
+    "scikit-learn>=1.9.1",
 ]
 
 [dependency-groups]
 dev = [
     "pytest>=9.2.0",
 ]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -4,8 +4,10 @@
 
 import pandas as pd
 import requests
+import warnings
 
 from footfall.common.config import SETTINGS
+from footfall.common.http import get_with_retry
 
 
 def load_historical_weather(
@@ -29,13 +31,11 @@ def load_historical_weather(
     }
 
 
-    response = requests.get(
+    response = get_with_retry(
         weather_settings["historical_api_url"],
         params=parameters,
         timeout=30,
-    )
-
-    response.raise_for_status()                  
+    )                
 
     #converts the API's JSON response into Python data.
     payload = response.json()                    
@@ -83,7 +83,7 @@ def load_live_weather() -> pd.DataFrame:
         "forecast_hours": 48,
     }
 
-    response = requests.get(
+    response = get_with_retry(
         weather_settings["live_api_url"],
         params=parameters,
         timeout=30,
@@ -135,6 +135,38 @@ def validate_weather_data(dataframe: pd.DataFrame) -> None:
     if missing_columns:
         raise ValueError(
             f"Missing required weather columns: {sorted(missing_columns)}"
+        )
+
+    if dataframe.empty:
+        raise ValueError(
+            "Weather dataframe is empty."
+        )
+
+    weather_columns = [
+        "forecast_temperature",
+        "forecast_precipitation",
+        "forecast_weather_code",
+    ]
+
+    # Stop if the API returned timestamps but no usable weather forecasts.
+    if dataframe[weather_columns].isna().all().all():
+        raise ValueError(
+            "Weather data contains no usable forecast values."
+        )
+
+    # Partial missing values are reported but do not stop the complete backfill.
+    rows_with_missing_weather = (
+        dataframe[weather_columns]
+        .isna()
+        .any(axis=1)
+        .sum()
+    )
+
+    if rows_with_missing_weather > 0:
+        warnings.warn(
+            f"Found {rows_with_missing_weather} weather rows "
+            "with missing forecast values.",
+            UserWarning,
         )
 
     duplicate_timestamps = dataframe["timestamp"].duplicated().sum()

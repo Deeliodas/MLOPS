@@ -1,0 +1,9 @@
+pandas
+numpy
+requests
+pyarrow
+pyyaml
+python-dotenv
+holidays>=0.107
+google-cloud-storage
+scikit-learn>=1.9.1

@@ -42,6 +42,22 @@ features:
     temperature: true
     condition: true
 
+  model_columns:
+    - target_hour
+    - target_day_of_week
+    - target_is_weekend
+    - target_month
+    - pedestrians_lag_24h
+    - pedestrians_lag_168h
+    - pedestrians_mean_3h_lag24h
+    - pedestrians_mean_6h_lag24h
+    - pedestrians_mean_24h_lag24h
+    - forecast_temperature
+    - forecast_precipitation
+    - forecast_weather_code
+    - target_is_holiday
+    - target_is_street_parade_impact
+    - target_is_sechselaeuten
 
 weather_data:
   provider: "open_meteo"
@@ -83,9 +99,14 @@ events:
     - "2026-04-20"
 
 feature_store:
+  bucket_name: "zurich-footfall-feature-store"
+  object_name: "features/footfall_features.parquet"
+  key_column: "target_timestamp"
+
   directory: "data/features"
   filename_prefix: "footfall_features"
   training_subdirectory: "training"
   live_subdirectory: "live"
 
-  
+training:
+  train_fraction: 0.8
