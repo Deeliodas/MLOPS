@@ -12,6 +12,9 @@ src/footfall/features/pipeline.py
 src/footfall/features/store.py
 src/footfall/training/baseline.py
 src/footfall/training/data.py
+src/footfall/training/evaluate.py
+src/footfall/training/model.py
+src/footfall/training/pipeline.py
 src/zurich_footfall_forecast.egg-info/PKG-INFO
 src/zurich_footfall_forecast.egg-info/SOURCES.txt
 src/zurich_footfall_forecast.egg-info/dependency_links.txt

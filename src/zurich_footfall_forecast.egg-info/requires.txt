@@ -7,3 +7,4 @@ python-dotenv
 holidays>=0.107
 google-cloud-storage
 scikit-learn>=1.9.1
+mlflow>=3.18.0
