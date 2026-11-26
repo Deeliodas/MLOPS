@@ -24,3 +24,7 @@ __pycache__/
 mlflow.db
 mlartifacts/
 mlruns/
+
+
+
+gha-creds-*.json

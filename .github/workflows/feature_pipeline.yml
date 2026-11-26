@@ -1,32 +1,33 @@
 name: Feature Pipeline
 
 on:
-  # Run automatically every 3 hours.
+  # Build all 24 feature rows for the next local day once every evening.
   schedule:
-    - cron: "15 */3 * * *"
+    - cron: "15 21 * * *"
       timezone: "Europe/Zurich"
 
   # Allow manual runs from the GitHub Actions UI.
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   feature-pipeline:
     runs-on: ubuntu-latest
 
-    env:
-      PYTHONPATH: src
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v10.3.2
+        uses: astral-sh/setup-uv@v10.4.0
 
       - name: Install dependencies
         run: uv sync --locked
@@ -34,12 +35,12 @@ jobs:
       - name: Run tests
         run: uv run python -m pytest -v
 
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: zurich-footfall-forecast
+          workload_identity_provider: projects/1098174852521/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-feature-pipeline@zurich-footfall-forecast.iam.gserviceaccount.com
+
       - name: Run live feature pipeline
         run: uv run python -m footfall.features.pipeline live
-
-      - name: Upload live feature snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: live-feature-snapshot
-          path: data/features/live/*.parquet
-          retention-days: 30
