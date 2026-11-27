@@ -8,9 +8,9 @@ CHAMPION_ALIAS = "champion"
 
 def promote_if_best(
     model_version: int,
-    model_mae: float,
+    validation_mae: float,
 ) -> bool:
-    """Promote a model version to champion if it has the best MAE."""
+    """Promote a model version if it beats the current champion."""
 
     client = MlflowClient()
 
@@ -19,32 +19,36 @@ def promote_if_best(
             MODEL_NAME,
             CHAMPION_ALIAS,
         )
-
     except MlflowException:
-        # No champion exists yet, so the first model becomes champion.
         client.set_registered_model_alias(
             MODEL_NAME,
             CHAMPION_ALIAS,
             str(model_version),
         )
-
         return True
 
     champion_run = client.get_run(
         champion.run_id
     )
 
-    champion_mae = champion_run.data.metrics[
-        "model_mae"
-    ]
+    champion_validation_mae = (
+        champion_run.data.metrics.get(
+            "validation_mae"
+        )
+    )
 
-    if model_mae < champion_mae:
+    if champion_validation_mae is None:
+        raise ValueError(
+            "Current champion does not have a "
+            "'validation_mae' metric."
+        )
+
+    if validation_mae < champion_validation_mae:
         client.set_registered_model_alias(
             MODEL_NAME,
             CHAMPION_ALIAS,
             str(model_version),
         )
-
         return True
 
     return False
