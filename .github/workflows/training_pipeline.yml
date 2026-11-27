@@ -1,0 +1,55 @@
+name: Training Pipeline
+
+on:
+  # Retrain once per week.
+  schedule:
+    - cron: "30 4 * * 1"
+      timezone: "Europe/Zurich"
+
+  # Allow manual runs from the GitHub Actions UI.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: training-pipeline
+  cancel-in-progress: false
+
+jobs:
+  training-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.4.0
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run tests
+        run: uv run python -m pytest -v
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: zurich-footfall-forecast
+          workload_identity_provider: projects/1098174852521/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-feature-pipeline@zurich-footfall-forecast.iam.gserviceaccount.com
+
+      - name: Run training pipeline
+        env:
+          MLFLOW_TRACKING_URI: ${{ vars.MLFLOW_TRACKING_URI }}
+          MLFLOW_TRACKING_USERNAME: ${{ vars.MLFLOW_TRACKING_USERNAME }}
+          MLFLOW_TRACKING_PASSWORD: ${{ secrets.DAGSHUB_TOKEN }}
+        run: uv run python -m footfall.training.pipeline
