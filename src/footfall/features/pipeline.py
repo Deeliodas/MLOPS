@@ -1,12 +1,12 @@
 # Pipeline orchestration for the Zurich Footfall Forecast.
-# Runs historical backfills and the live feature pipeline, then stores the resulting training or live feature snapshots.
+# Runs historical backfills and the live feature pipeline and stores
+# the resulting feature rows in the persistent feature store.
 
 import argparse
 
 import pandas as pd
+
 from footfall.common.config import SETTINGS
-
-
 from footfall.features.build_features import (
     build_base_features,
     build_training_features,
@@ -51,11 +51,17 @@ def run_backfill(
     )
 
     feature_dataframe = feature_dataframe[
-        (feature_dataframe["target_timestamp"] >= start_timestamp)
-        & (feature_dataframe["target_timestamp"] < end_timestamp)
+        (
+            feature_dataframe["target_timestamp"]
+            >= start_timestamp
+        )
+        & (
+            feature_dataframe["target_timestamp"]
+            < end_timestamp
+        )
     ].copy()
 
-    # Saves or updates the historical feature rows in the persistent GCS feature store.
+    # Save or update historical rows in the persistent GCS feature store.
     feature_store_path = save_feature_rows(
         feature_dataframe,
     )
@@ -74,14 +80,22 @@ def create_live_prediction_timestamps(
     local_timezone = SETTINGS["time"]["local_timezone"]
     forecast_horizon = SETTINGS["target"]["forecast_horizon_hours"]
 
-    reference_timestamp = pd.Timestamp(reference_timestamp)
+    reference_timestamp = pd.Timestamp(
+        reference_timestamp
+    )
 
     if reference_timestamp.tzinfo is None:
-        reference_timestamp = reference_timestamp.tz_localize("UTC")
+        reference_timestamp = (
+            reference_timestamp.tz_localize("UTC")
+        )
     else:
-        reference_timestamp = reference_timestamp.tz_convert("UTC")
+        reference_timestamp = (
+            reference_timestamp.tz_convert("UTC")
+        )
 
-    reference_local = reference_timestamp.tz_convert(local_timezone)
+    reference_local = reference_timestamp.tz_convert(
+        local_timezone
+    )
 
     next_day_start_local = (
         reference_local.normalize()
@@ -108,7 +122,6 @@ def create_live_prediction_timestamps(
     return prediction_timestamps_utc
 
 
-
 def run_live_pipeline() -> pd.DataFrame:
     """Build and store feature rows for all target hours of the next local day."""
 
@@ -118,12 +131,27 @@ def run_live_pipeline() -> pd.DataFrame:
         "timestamp"
     ].max()
 
-    prediction_timestamps = create_live_prediction_timestamps(
-        latest_timestamp
+    prediction_timestamps = (
+        create_live_prediction_timestamps(
+            latest_timestamp
+        )
     )
 
-    # Add timestamp-only anchor rows for hours that are not yet present
-    # in the Hystreet data.
+    forecast_horizon = SETTINGS[
+        "target"
+    ]["forecast_horizon_hours"]
+
+    # Weather features belong to the target timestamp,
+    # not the prediction timestamp.
+    required_weather_timestamps = (
+        prediction_timestamps
+        + pd.Timedelta(
+            hours=forecast_horizon
+        )
+    )
+
+    # Add timestamp-only anchor rows for prediction hours
+    # that are not yet present in the Hystreet data.
     anchor_dataframe = pd.DataFrame(
         {
             "timestamp": prediction_timestamps,
@@ -149,7 +177,11 @@ def run_live_pipeline() -> pd.DataFrame:
         .reset_index(drop=True)
     )
 
-    weather_dataframe = load_live_weather()
+    # Only require complete weather data for the target hours
+    # that are actually needed by the live feature rows.
+    weather_dataframe = load_live_weather(
+        required_timestamps=required_weather_timestamps,
+    )
 
     feature_dataframe = build_base_features(
         extended_pedestrian_dataframe,
@@ -162,7 +194,9 @@ def run_live_pipeline() -> pd.DataFrame:
         )
     ].copy()
 
-    if len(live_features) != len(prediction_timestamps):
+    if len(live_features) != len(
+        prediction_timestamps
+    ):
         raise ValueError(
             "Could not build all required live feature rows."
         )
@@ -173,9 +207,27 @@ def run_live_pipeline() -> pd.DataFrame:
         "forecast_weather_code",
     ]
 
-    if live_features[weather_columns].isna().any().any():
+    if (
+        live_features[
+            weather_columns
+        ]
+        .isna()
+        .any()
+        .any()
+    ):
+        missing_weather_rows = live_features.loc[
+            live_features[
+                weather_columns
+            ].isna().any(axis=1),
+            [
+                "target_timestamp",
+                *weather_columns,
+            ],
+        ]
+
         raise ValueError(
-            "Live feature rows contain missing weather values."
+            "Live feature rows contain missing weather values:\n"
+            f"{missing_weather_rows.to_string(index=False)}"
         )
 
     feature_store_path = save_feature_rows(
@@ -190,21 +242,20 @@ def run_live_pipeline() -> pd.DataFrame:
     return live_features
 
 
-
-
 def parse_arguments() -> argparse.Namespace:
     """Parse command-line arguments for the feature pipeline."""
 
     parser = argparse.ArgumentParser(
-        description="Run the Zurich footfall feature pipeline."
+        description=(
+            "Run the Zurich footfall feature pipeline."
+        )
     )
 
     subparsers = parser.add_subparsers(
-        dest="mode",                                  # mode: backfill or live
+        dest="mode",
         required=True,
     )
 
-    #Defines backfille mode
     backfill_parser = subparsers.add_parser(
         "backfill",
         help="Build historical training features.",
@@ -222,10 +273,9 @@ def parse_arguments() -> argparse.Namespace:
         help="Backfill end date in YYYY-MM-DD format.",
     )
 
-    # Defines Live Mode
     subparsers.add_parser(
         "live",
-        help="Build the latest live feature row.",
+        help="Build live features for the next local day.",
     )
 
     return parser.parse_args()

@@ -5,6 +5,7 @@
 import pandas as pd
 import requests
 import warnings
+import time
 
 from footfall.common.config import SETTINGS
 from footfall.common.http import get_with_retry
@@ -67,8 +68,10 @@ def load_historical_weather(
 
 
 
-def load_live_weather() -> pd.DataFrame:
-    """Load the current weather forecast from Open-Meteo."""
+def load_live_weather(
+    required_timestamps: pd.DatetimeIndex,
+) -> pd.DataFrame:
+    """Load live weather and require complete forecasts for needed timestamps."""
 
     weather_settings = SETTINGS["weather_data"]
 
@@ -83,39 +86,99 @@ def load_live_weather() -> pd.DataFrame:
         "forecast_hours": 48,
     }
 
-    response = get_with_retry(
-        weather_settings["live_api_url"],
-        params=parameters,
-        timeout=30,
+    weather_columns = [
+        "forecast_temperature",
+        "forecast_precipitation",
+        "forecast_weather_code",
+    ]
+
+    max_attempts = 4
+
+    for attempt in range(1, max_attempts + 1):
+        response = get_with_retry(
+            weather_settings["live_api_url"],
+            params=parameters,
+            timeout=30,
+        )
+
+        payload = response.json()
+
+        dataframe = pd.DataFrame(
+            payload["hourly"]
+        )
+
+        dataframe["time"] = pd.to_datetime(
+            dataframe["time"],
+            utc=True,
+        )
+
+        dataframe = dataframe.rename(
+            columns={
+                "time": "timestamp",
+                "temperature_2m": "forecast_temperature",
+                "precipitation": "forecast_precipitation",
+                "weather_code": "forecast_weather_code",
+            }
+        )
+
+        dataframe = dataframe.sort_values(
+            "timestamp"
+        ).reset_index(drop=True)
+
+        validate_weather_data(dataframe)
+
+        required_weather = dataframe[
+            dataframe["timestamp"].isin(
+                required_timestamps
+            )
+        ].copy()
+
+        missing_timestamps = required_timestamps.difference(
+            required_weather["timestamp"]
+        )
+
+        missing_value_rows = required_weather[
+            weather_columns
+        ].isna().any(axis=1)
+
+        incomplete_timestamps = required_weather.loc[
+            missing_value_rows,
+            "timestamp",
+        ]
+
+        problem_timestamps = (
+            missing_timestamps
+            .union(
+                pd.DatetimeIndex(
+                    incomplete_timestamps
+                )
+            )
+        )
+
+        if len(problem_timestamps) == 0:
+            return dataframe
+
+        if attempt == max_attempts:
+            raise ValueError(
+                "Required live weather is still incomplete after "
+                f"{max_attempts} attempts. Problem timestamps: "
+                f"{problem_timestamps.tolist()}"
+            )
+
+        delay_seconds = 15 * (2 ** (attempt - 1))
+
+        warnings.warn(
+            "Required live weather is incomplete. "
+            f"Attempt {attempt}/{max_attempts}. "
+            f"Problem timestamps: {problem_timestamps.tolist()}. "
+            f"Retrying in {delay_seconds} seconds."
+        )
+
+        time.sleep(delay_seconds)
+
+    raise RuntimeError(
+        "Unexpected end of live weather retry loop."
     )
-
-    response.raise_for_status()
-
-    payload = response.json()
-
-    dataframe = pd.DataFrame(payload["hourly"])
-
-    dataframe["time"] = pd.to_datetime(
-        dataframe["time"],
-        utc=True,
-    )
-
-    dataframe = dataframe.rename(
-        columns={
-            "time": "timestamp",
-            "temperature_2m": "forecast_temperature",
-            "precipitation": "forecast_precipitation",
-            "weather_code": "forecast_weather_code",
-        }
-    )
-
-    dataframe = dataframe.sort_values(
-        "timestamp"
-    ).reset_index(drop=True)
-
-    validate_weather_data(dataframe)
-
-    return dataframe
 
 
 
