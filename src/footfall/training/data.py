@@ -51,39 +51,79 @@ def load_training_data() -> pd.DataFrame:
 
 def split_training_data(
     dataframe: pd.DataFrame,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Split training data chronologically into train and test sets."""
+) -> tuple[
+    pd.DataFrame,
+    pd.DataFrame,
+    pd.DataFrame,
+]:
+    """Split data chronologically into train, validation, and test sets."""
 
     train_fraction = SETTINGS["training"]["train_fraction"]
+    validation_fraction = SETTINGS["training"]["validation_fraction"]
 
-    if not 0 < train_fraction < 1:
+    if train_fraction <= 0:
         raise ValueError(
-            "training.train_fraction must be between 0 and 1."
+            "training.train_fraction must be greater than 0."
         )
 
-    split_index = int(
+    if validation_fraction <= 0:
+        raise ValueError(
+            "training.validation_fraction must be greater than 0."
+        )
+
+    if train_fraction + validation_fraction >= 1:
+        raise ValueError(
+            "Train and validation fractions must sum to less than 1."
+        )
+
+    train_end = int(
         len(dataframe) * train_fraction
     )
 
+    validation_end = int(
+        len(dataframe)
+        * (train_fraction + validation_fraction)
+    )
+
     train_dataframe = dataframe.iloc[
-        :split_index
+        :train_end
+    ].copy()
+
+    validation_dataframe = dataframe.iloc[
+        train_end:validation_end
     ].copy()
 
     test_dataframe = dataframe.iloc[
-        split_index:
+        validation_end:
     ].copy()
 
-    if train_dataframe.empty or test_dataframe.empty:
+    if (
+        train_dataframe.empty
+        or validation_dataframe.empty
+        or test_dataframe.empty
+    ):
         raise ValueError(
-            "Train/test split produced an empty dataset."
+            "Train/validation/test split produced an empty dataset."
         )
 
     if (
         train_dataframe["target_timestamp"].max()
+        >= validation_dataframe["target_timestamp"].min()
+    ):
+        raise ValueError(
+            "Training and validation data overlap in time."
+        )
+
+    if (
+        validation_dataframe["target_timestamp"].max()
         >= test_dataframe["target_timestamp"].min()
     ):
         raise ValueError(
-            "Training data overlaps with test data in time."
+            "Validation and test data overlap in time."
         )
 
-    return train_dataframe, test_dataframe
+    return (
+        train_dataframe,
+        validation_dataframe,
+        test_dataframe,
+    )

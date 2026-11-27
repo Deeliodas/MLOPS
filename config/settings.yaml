@@ -109,4 +109,5 @@ feature_store:
   live_subdirectory: "live"
 
 training:
-  train_fraction: 0.8
+  train_fraction: 0.7
+  validation_fraction: 0.15

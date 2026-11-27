@@ -37,3 +37,38 @@ def train_model(
     )
 
     return model
+
+
+
+
+def train_quantile_models(
+    features: pd.DataFrame,
+    target: pd.Series,
+) -> dict[str, HistGradientBoostingRegressor]:
+    """Train P10, P50, and P90 quantile regression models."""
+
+    quantiles = {
+        "p10": 0.10,
+        "p50": 0.50,
+        "p90": 0.90,
+    }
+
+    models = {}
+
+    for name, quantile in quantiles.items():
+        model = HistGradientBoostingRegressor(
+            loss="quantile",
+            quantile=quantile,
+            max_iter=200,
+            learning_rate=0.05,
+            random_state=42,
+        )
+
+        model.fit(
+            features,
+            target,
+        )
+
+        models[name] = model
+
+    return models

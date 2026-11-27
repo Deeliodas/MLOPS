@@ -1,9 +1,9 @@
 name: Feature Pipeline
 
 on:
-  # Build all 24 feature rows for the next local day once every evening.
+  # Fetch and update live features every 3 hours.
   schedule:
-    - cron: "15 21 * * *"
+    - cron: "15 */3 * * *"
       timezone: "Europe/Zurich"
 
   # Allow manual runs from the GitHub Actions UI.
