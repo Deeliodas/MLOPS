@@ -127,13 +127,16 @@ def run_live_pipeline() -> pd.DataFrame:
 
     pedestrian_dataframe = ingest_pedestrian_data()
 
-    latest_timestamp = pedestrian_dataframe[
-        "timestamp"
-    ].max()
+    # Use the actual current time to determine the next local day.
+    # Do not use the latest Hystreet timestamp because the source
+    # can lag behind the current time by several hours.
+    current_timestamp = pd.Timestamp.now(
+        tz="UTC"
+    )
 
     prediction_timestamps = (
         create_live_prediction_timestamps(
-            latest_timestamp
+            current_timestamp
         )
     )
 
